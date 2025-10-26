@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <title>Student Attendance & Marks Management</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <!-- Apply saved theme before paint to avoid flash -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem("samms_theme");
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved || (prefersDark ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch {}
+    })();
+  </script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <style>
+    :root {
+      /* Palette (light defaults) */
+      --bg: #f8fafc;            /* body bg */
+      --bg-2: #eef2f7;          /* subtle section bg */
+      --panel: #ffffff;         /* card bg */
+      --panel-2: #ffffff;       /* card gradient end */
+      --text: #0f172a;          /* primary text */
+      --muted: #475569;         /* secondary text */
+      --primary: #2563eb;       /* primary */
+      --primary-2: #1d4ed8;     /* primary deeper */
+      --success: #16a34a;
+      --warning: #eab308;
+      --danger: #dc2626;
+      --border: #e2e8f0;        /* borders */
+      --table: #ffffff;         /* table bg */
+
+      --ring: color-mix(in oklab, var(--primary) 60%, white);
+      --ring-outer: color-mix(in oklab, var(--primary) 20%, transparent);
+
+      /* Typography & spacing */
+      --radius: 12px;
+      --radius-sm: 10px;
+      --shadow-1: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+      --shadow-2: 0 2px 10px rgba(0,0,0,.06), 0 18px 40px rgba(0,0,0,.10);
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0b1020;
+      --bg-2: #0a0f1c;
+      --panel: #0f172a;
+      --panel-2: #0b1220;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --primary: #60a5fa;
+      --primary-2: #3b82f6;
+      --success: #22c55e;
+      --warning: #facc15;
+      --danger: #ef4444;
+      --border: #182238;
+      --table: #0b1326;
+
+      --ring: color-mix(in oklab, var(--primary) 70%, black);
+      --ring-outer: color-mix(in oklab, var(--primary) 15%, transparent);
+    }
+
+    /* Base */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background:
+        radial-gradient(1200px 600px at 10% -20%, var(--bg-2) 0%, transparent 60%),
+        radial-gradient(1200px 600px at 100% 0%, var(--bg-2) 0%, transparent 40%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    :focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+
+    /* Skip link */
+    .skip-link {
+      position: absolute; left: 8px; top: -40px;
+      background: var(--panel); color: var(--text);
+      padding: 8px 12px; border-radius: 8px;
+      box-shadow: var(--shadow-1); border: 1px solid var(--border);
+      transition: top .2s ease;
+      z-index: 50;
+    }
+    .skip-link:focus { top: 8px; }
+
+    /* Layout */
+    .app-header, .app-footer {
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, color-mix(in oklab, var(--panel) 86%, transparent), color-mix(in oklab, var(--panel-2) 100%, transparent));
+      backdrop-filter: saturate(1.1) blur(4px);
+    }
+    .app-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand .logo { font-size: 22px; }
+    .brand h1 {
+      font-size: clamp(16px, 1.4vw, 20px);
+      margin: 0; font-weight: 700; letter-spacing: .2px;
+    }
+
+    .top-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #currentUserLabel { color: var(--muted); margin-right: 6px; font-weight: 600; }
+    .app-footer { padding: 14px 18px; color: var(--muted); border-top: 1px solid var(--border); }
+
+    main#app { padding: clamp(14px, 2vw, 22px); max-width: 1200px; margin: 0 auto; }
+
+    /* Cards */
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: clamp(14px, 2vw, 18px);
+      box-shadow: var(--shadow-1);
+    }
+    .card:hover { box-shadow: var(--shadow-2); transition: box-shadow .25s ease; }
+
+    /* Grid */
+    .grid { display: grid; gap: 16px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    @media (max-width: 1024px) {
+      .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
+    }
+
+    .panel-header { margin-bottom: 12px; }
+    .panel-header h2 { margin: 0 0 6px; font-size: clamp(18px, 2vw, 22px); }
+    .muted { color: var(--muted); }
+
+    /* Forms */
+    .form-row { display: grid; gap: 6px; margin-bottom: 12px; }
+    .form-row label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .2px; }
+    input, select, button, textarea { font: inherit; color: var(--text); }
+    input, select, textarea {
+      background: color-mix(in oklab, var(--panel-2) 92%, transparent);
+      border: 1px solid var(--border);
+      padding: 9px 11px; border-radius: 10px; outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+      accent-color: var(--primary);
+    }
+    input::placeholder { color: color-mix(in oklab, var(--muted) 70%, transparent); }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px var(--ring-outer), inset 0 1px 0 rgba(255,255,255,.03);
+      background: color-mix(in oklab, var(--panel-2) 98%, transparent);
+    }
+    input[type="date"], input[type="number"] { color-scheme: light dark; }
+
+    /* Buttons */
+    button {
+      padding: 9px 12px; border-radius: 10px; border: 1px solid transparent;
+      cursor: pointer; background: color-mix(in oklab, var(--panel-2) 96%, transparent);
+      transition: transform .05s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+      user-select: none;
+    }
+    button:hover { background: color-mix(in oklab, var(--panel-2) 100%, transparent); }
+    button:active { transform: translateY(1px); }
+    button.primary {
+      background: linear-gradient(180deg, var(--primary), var(--primary-2));
+      border-color: color-mix(in oklab, var(--primary) 50%, black);
+      color: white; text-shadow: 0 1px 0 rgba(0,0,0,.2);
+    }
+    button.secondary {
+      background: color-mix(in oklab, var(--panel-2) 98%, transparent);
+      border-color: var(--border); color: var(--text);
+    }
+    button.small { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+    button.danger {
+      background: linear-gradient(180deg, var(--danger), color-mix(in oklab, var(--danger) 86%, black));
+      color: white; border-color: color-mix(in oklab, var(--danger) 50%, black);
+    }
+    .icon-btn { display: inline-flex; align-items: center; gap: 8px; }
+    .icon { font-size: 16px; line-height: 1; }
+
+    .hidden { display: none !important; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tabs { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .tab-btn {
+      background: transparent; border: 1px solid transparent; color: var(--text);
+      border-radius: 999px; padding: 8px 12px; position: relative;
+    }
+    .tab-btn[aria-selected="true"] {
+      border-color: var(--primary);
+      background: color-mix(in oklab, var(--primary) 10%, transparent);
+      box-shadow: 0 0 0 3px var(--ring-outer);
+    }
+    .tab-btn:hover { background: color-mix(in oklab, var(--panel-2) 96%, transparent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Table */
+    .table-wrap { overflow: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 560px; background: var(--table); }
+    thead th {
+      position: sticky; top: 0; background: color-mix(in oklab, var(--panel-2) 85%, transparent);
+      z-index: 1; text-align: left; font-weight: 700; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    th, td { padding: 10px 12px; }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:nth-child(even) { background: color-mix(in oklab, var(--panel-2) 6%, transparent); }
+    tbody tr:hover { background: color-mix(in oklab, var(--primary) 8%, transparent); transition: background .15s ease; }
+
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 10px; }
+
+    /* Import label */
+    .import-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: color-mix(in oklab, var(--panel-2) 98%, transparent);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 7px 10px; cursor: pointer;
+      transition: background .2s ease, border-color .2s ease;
+    }
+    .import-label:hover { background: color-mix(in oklab, var(--panel-2) 100%, transparent); }
+    .import-label input { display: none; }
+
+    /* Badges / tags */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: color-mix(in oklab, var(--primary) 18%, transparent);
+      color: color-mix(in oklab, var(--primary) 90%, var(--text));
+      padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border);
+    }
+    .tag {
+      background: color-mix(in oklab, var(--primary) 12%, transparent);
+      color: color-mix(in oklab, var(--primary) 90%, var(--text));
+      border-radius: 6px; padding: 2px 8px; font-size: 12px; border: 1px solid var(--border);
+    }
+
+    /* Scrollbar (webkit) */
+    *::-webkit-scrollbar { height: 10px; width: 10px; }
+    *::-webkit-scrollbar-thumb {
+      background: color-mix(in oklab, var(--panel-2) 80%, var(--primary));
+      border-radius: 999px; border: 2px solid transparent; background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-track { background: color-mix(in oklab, var(--panel-2) 90%, transparent); border-radius: 999px; }
+
+    /* Utility */
+    .note { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <header class="app-header">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">📊</span>
+      <h1>Attendance & Marks</h1>
+    </div>
+    <nav class="top-nav" aria-label="Top bar">
+      <button id="themeToggle" class="secondary icon-btn" title="Toggle theme" aria-pressed="false">
+        <span class="icon" aria-hidden="true">🌞</span><span class="label">Theme</span>
+      </button>
+      <span id="currentUserLabel" aria-live="polite"></span>
+      <button id="btnExport" class="secondary hidden" title="Export data to JSON">Export</button>
+      <label class="import-label hidden" id="importLabel" title="Import data from JSON">
+        Import
+        <input type="file" id="importFile" accept="application/json" />
+      </label>
+      <button id="logoutBtn" class="danger hidden">Logout</button>
+    </nav>
+  </header>
+
+  <main id="app" tabindex="-1">
+    <!-- Login View -->
+    <section id="view-login" class="view active" aria-labelledby="loginHeading">
+      <div class="card">
+        <h2 id="loginHeading">Login</h2>
+        <p class="note">Demo login is not secure; data is stored in your browser.</p>
+        <form id="loginForm">
+          <div class="form-row">
+            <label for="login-username">Username</label>
+            <input id="login-username" type="text" name="username" placeholder="e.g., teacher1 or s1" required />
+          </div>
+          <div class="form-row">
+            <label for="login-password">Password</label>
+            <input id="login-password" type="password" name="password" placeholder="Try: pass" required />
+          </div>
+          <div class="form-row">
+            <label for="login-role">Role</label>
+            <select id="login-role" name="role" required>
+              <option value="teacher">Teacher</option>
+              <option value="student">Student</option>
+            </select>
+          </div>
+          <button type="submit" class="primary">Login</button>
+        </form>
+        <div class="help">
+          <details>
+            <summary>Demo accounts</summary>
+            <ul>
+              <li>Teacher: username <code>teacher1</code>, password <code>pass</code></li>
+              <li>Student: username <code>s1</code>, password <code>pass</code></li>
+              <li>Student: username <code>s2</code>, password <code>pass</code></li>
+              <li>Student: username <code>s3</code>, password <code>pass</code></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Teacher View -->
+    <section id="view-teacher" class="view" aria-labelledby="teacherHeading">
+      <h2 id="teacherHeading" class="visually-hidden" style="position:absolute;left:-9999px;">Teacher Console</h2>
+
+      <div class="tabs" role="tablist" aria-label="Teacher sections">
+        <button class="tab-btn" role="tab" aria-selected="true" data-tab="teacher-students">Manage Students</button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="teacher-attendance">Attendance</button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="teacher-marks">Marks</button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="teacher-reports">Reports</button>
+      </div>
+
+      <!-- Manage Students -->
+      <section id="teacher-students" class="tab-panel active" role="tabpanel" aria-label="Manage Students">
+        <div class="panel-header">
+          <h2>Students</h2>
+          <div class="row">
+            <div class="form-row">
+              <label for="studentClassFilter">Filter by Class</label>
+              <input id="studentClassFilter" type="text" placeholder="e.g., 10A (empty for all)" />
+            </div>
+            <button id="refreshStudents" class="secondary">Refresh</button>
+          </div>
+        </div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Add / Edit Student</h3>
+            <form id="studentForm">
+              <input type="hidden" name="id" />
+              <div class="form-row">
+                <label for="st-name">Student Name</label>
+                <input id="st-name" type="text" name="name" required />
+              </div>
+              <div class="form-row">
+                <label for="st-class">Class</label>
+                <input id="st-class" type="text" name="className" placeholder="e.g., 10A" required />
+              </div>
+              <div class="form-row">
+                <label for="st-username">Username (student login)</label>
+                <input id="st-username" type="text" name="username" placeholder="unique" required />
+              </div>
+              <div class="form-row">
+                <label for="st-password">Password</label>
+                <input id="st-password" type="text" name="password" value="pass" required />
+              </div>
+              <div class="actions">
+                <button type="submit" class="primary">Save Student</button>
+                <button type="button" id="resetStudentForm" class="secondary">Reset</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Student List</h3>
+            <div class="table-wrap" role="region" aria-label="Students table" tabindex="0">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Class</th>
+                    <th scope="col">Username</th>
+                    <th scope="col" aria-label="actions"></th>
+                  </tr>
+                </thead>
+                <tbody id="studentsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Attendance -->
+      <section id="teacher-attendance" class="tab-panel" role="tabpanel" aria-label="Attendance">
+        <div class="panel-header">
+          <h2>Record Attendance</h2>
+        </div>
+        <form id="attendanceForm" class="card">
+          <div class="grid three">
+            <div class="form-row">
+              <label for="att-date">Date</label>
+              <input id="att-date" type="date" name="date" required />
+            </div>
+            <div class="form-row">
+              <label for="att-class">Class</label>
+              <input id="att-class" type="text" name="className" placeholder="e.g., 10A" required />
+            </div>
+            <div class="form-row">
+              <label>Quick Actions</label>
+              <div class="row">
+                <button type="button" id="markAllPresent" class="secondary small">All Present</button>
+                <button type="button" id="markAllAbsent" class="secondary small">All Absent</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap" role="region" aria-label="Attendance table" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Student</th>
+                  <th scope="col">Present</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceTbody"></tbody>
+            </table>
+          </div>
+          <div class="actions">
+            <button type="submit" class="primary">Save Attendance</button>
+            <button type="button" id="loadAttendance" class="secondary">Load Existing</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Marks -->
+      <section id="teacher-marks" class="tab-panel" role="tabpanel" aria-label="Marks">
+        <div class="panel-header">
+          <h2>Record Marks</h2>
+        </div>
+        <form id="marksMetaForm" class="card">
+          <div class="grid four">
+            <div class="form-row">
+              <label for="mk-class">Class</label>
+              <input id="mk-class" type="text" name="className" placeholder="e.g., 10A" required />
+            </div>
+            <div class="form-row">
+              <label for="mk-subject">Subject</label>
+              <input id="mk-subject" type="text" name="subject" placeholder="e.g., Math" required />
+            </div>
+            <div class="form-row">
+              <label for="mk-aname">Assessment Name</label>
+              <input id="mk-aname" type="text" name="assessmentName" placeholder="e.g., Unit Test 1" required />
+            </div>
+            <div class="form-row">
+              <label for="mk-date">Date</label>
+              <input id="mk-date" type="date" name="date" required />
+            </div>
+            <div class="form-row">
+              <label for="mk-total">Total Marks</label>
+              <input id="mk-total" type="number" name="total" min="1" value="100" required />
+            </div>
+            <div class="form-row" style="align-self:end;">
+              <button type="button" id="prepareMarks" class="secondary">Prepare Entry Sheet</button>
+            </div>
+          </div>
+        </form>
+
+        <form id="marksForm" class="card hidden" aria-live="polite">
+          <h3 id="marksSheetTitle">Marks Entry</h3>
+          <div class="table-wrap" role="region" aria-label="Marks entry table" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Student</th>
+                  <th scope="col">Marks Obtained</th>
+                </tr>
+              </thead>
+              <tbody id="marksTbody"></tbody>
+            </table>
+          </div>
+          <div class="actions">
+            <button type="submit" class="primary">Save Marks</button>
+            <button type="button" id="cancelMarks" class="secondary">Cancel</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Reports -->
+      <section id="teacher-reports" class="tab-panel" role="tabpanel" aria-label="Reports">
+        <div class="panel-header">
+          <h2>Reports & Insights</h2>
+        </div>
+        <form id="reportFilters" class="card">
+          <div class="grid four">
+            <div class="form-row">
+              <label for="rf-class">Class</label>
+              <input id="rf-class" type="text" name="className" placeholder="e.g., 10A" />
+            </div>
+            <div class="form-row">
+              <label for="rf-subject">Subject (for marks)</label>
+              <input id="rf-subject" type="text" name="subject" placeholder="e.g., Math" />
+            </div>
+            <div class="form-row">
+              <label for="rf-from">Date Range (Attendance From)</label>
+              <input id="rf-from" type="date" name="fromDate" />
+            </div>
+            <div class="form-row">
+              <label for="rf-to">Date Range (Attendance To)</label>
+              <input id="rf-to" type="date" name="toDate" />
+            </div>
+            <div class="form-row" style="align-self:end;">
+              <button type="button" id="buildReports" class="secondary">Build Reports</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="grid two">
+          <div class="card">
+            <h3>Attendance % by Student</h3>
+            <canvas id="attendanceByStudentChart" height="220" aria-label="Attendance percentage chart" role="img"></canvas>
+          </div>
+          <div class="card">
+            <h3>Average Marks by Student (Subject)</h3>
+            <canvas id="avgMarksByStudentChart" height="220" aria-label="Average marks chart" role="img"></canvas>
+          </div>
+          <div class="card">
+            <h3>Assessment-wise Class Average</h3>
+            <canvas id="classAssessmentAvgChart" height="220" aria-label="Class average chart" role="img"></canvas>
+          </div>
+          <div class="card">
+            <h3>Top Performers (Latest Assessment)</h3>
+            <canvas id="topPerformersChart" height="220" aria-label="Top performers bar chart" role="img"></canvas>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- Student View -->
+    <section id="view-student" class="view" aria-labelledby="studentHeading">
+      <div class="panel-header">
+        <h2 id="studentHeading">My Dashboard</h2>
+        <p class="muted" id="studentInfo"></p>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h3>Attendance Over Time</h3>
+          <canvas id="studentAttendanceOverTime" height="220" aria-label="Attendance over time chart" role="img"></canvas>
+        </div>
+        <div class="card">
+          <h3>Average Marks by Subject</h3>
+          <canvas id="studentAvgMarksBySubject" height="220" aria-label="Average marks by subject chart" role="img"></canvas>
+        </div>
+        <div class="card">
+          <h3>Latest Assessment Scores</h3>
+          <canvas id="studentLatestScores" height="220" aria-label="Latest scores chart" role="img"></canvas>
+        </div>
+        <div class="card">
+          <h3>Summary</h3>
+          <ul id="studentSummary"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <small class="muted">Local-only demo. Data is stored in your browser via localStorage.</small>
+  </footer>
+
+  <script>
+    // Theme toggle
+    (function () {
+      function setTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        try { localStorage.setItem("samms_theme", theme); } catch {}
+        const btn = document.getElementById("themeToggle");
+        if (btn) {
+          const isDark = theme === "dark";
+          btn.setAttribute("aria-pressed", String(isDark));
+          btn.innerHTML = isDark
+            ? '<span class="icon" aria-hidden="true">🌙</span><span class="label">Dark</span>'
+            : '<span class="icon" aria-hidden="true">🌞</span><span class="label">Light</span>';
+        }
+      }
+      function toggleTheme() {
+        const current = document.documentElement.getAttribute("data-theme") || "light";
+        setTheme(current === "light" ? "dark" : "light");
+      }
+      window.addEventListener("DOMContentLoaded", () => {
+        const saved = document.documentElement.getAttribute("data-theme") || "light";
+        setTheme(saved);
+        const btn = document.getElementById("themeToggle");
+        if (btn) btn.addEventListener("click", toggleTheme);
+      });
+    })();
+  </script>
+
+  <script>
+    // Student Attendance & Marks Management System (Frontend-only)
+    // Storage: localStorage (namespace: SAMMS_DB_V1)
+    // Charts: Chart.js via CDN
+    (function () {
+      const STORAGE_KEY = "SAMMS_DB_V1";
+      const APP_VERSION = 1;
+
+      // App State
+      const state = {
+        currentUser: null, // { id, username, role, studentId? }
+        charts: {},
+        db: null,
+      };
+
+      // Initial Seed Data
+      const defaultDB = () => ({
+        version: APP_VERSION,
+        users: [
+          { id: uid(), username: "teacher1", password: "pass", role: "teacher" },
+          { id: uid(), username: "s1", password: "pass", role: "student", studentId: "stu_1" },
+          { id: uid(), username: "s2", password: "pass", role: "student", studentId: "stu_2" },
+          { id: uid(), username: "s3", password: "pass", role: "student", studentId: "stu_3" },
+        ],
+        students: [
+          { id: "stu_1", name: "Alice Johnson", className: "10A" },
+          { id: "stu_2", name: "Bob Smith", className: "10A" },
+          { id: "stu_3", name: "Carlos Lee", className: "10B" },
+        ],
+        subjects: ["Math", "Science", "English"],
+        assessments: [],
+        marks: [],
+        attendance: [],
+      });
+
+      // Utils
+      function uid() {
+        return "id_" + Math.random().toString(36).slice(2, 8) + "_" + Date.now().toString(36);
+      }
+      function saveDB() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.db));
+      }
+      function loadDB() {
+        const s = localStorage.getItem(STORAGE_KEY);
+        if (!s) {
+          state.db = defaultDB();
+          saveDB();
+          return;
+        }
+        try {
+          state.db = JSON.parse(s);
+          if (!state.db.version || state.db.version < APP_VERSION) {
+            state.db.version = APP_VERSION;
+            saveDB();
+          }
+        } catch (e) {
+          console.error("Failed to parse DB. Resetting.", e);
+          state.db = defaultDB();
+          saveDB();
+        }
+      }
+      function setCurrentUser(u) {
+        state.currentUser = u;
+        renderAuthControls();
+      }
+      function formatDate(d) {
+        const dt = new Date(d);
+        if (Number.isNaN(dt.getTime())) return d;
+        return dt.toISOString().slice(0, 10);
+      }
+
+      // DOM helpers
+      const $ = (sel, root = document) => root.querySelector(sel);
+      const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+      // Views
+      function showView(viewId) {
+        $$(".view").forEach((v) => v.classList.remove("active"));
+        $("#" + viewId)?.classList.add("active");
+        // Move focus to main on view change (accessibility)
+        const main = document.getElementById("app");
+        if (main) main.focus({ preventScroll: true });
+      }
+
+      function renderAuthControls() {
+        const lbl = $("#currentUserLabel");
+        const logoutBtn = $("#logoutBtn");
+        const btnExport = $("#btnExport");
+        const importLabel = $("#importLabel");
+
+        if (state.currentUser) {
+          lbl.textContent = state.currentUser.role.toUpperCase() + ": " + state.currentUser.username;
+          logoutBtn.classList.remove("hidden");
+          btnExport.classList.remove("hidden");
+          importLabel.classList.remove("hidden");
+        } else {
+          lbl.textContent = "";
+          logoutBtn.classList.add("hidden");
+          btnExport.classList.add("hidden");
+          importLabel.classList.add("hidden");
+        }
+      }
+
+      // Login / Logout
+      function handleLogin(e) {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const username = (fd.get("username") || "").trim();
+        const password = (fd.get("password") || "").trim();
+        const role = fd.get("role");
+
+        const user = state.db.users.find(
+          (u) => u.username === username && u.password === password && u.role === role
+        );
+        if (!user) {
+          alert("Invalid credentials or role.");
+          return;
+        }
+        setCurrentUser(user);
+
+        if (user.role === "teacher") {
+          showView("view-teacher");
+          selectTab("teacher-students");
+          loadStudentsTable();
+        } else {
+          showView("view-student");
+          renderStudentDashboard();
+        }
+      }
+
+      function logout() {
+        setCurrentUser(null);
+        showView("view-login");
+      }
+
+      // Tabs + a11y
+      function selectTab(tabId) {
+        const btns = $$(".tab-btn");
+        const panels = $$(".tab-panel");
+        btns.forEach((b) => {
+          const isActive = b.dataset.tab === tabId;
+          b.classList.toggle("active", isActive);
+          b.setAttribute("aria-selected", String(isActive));
+          b.tabIndex = isActive ? 0 : -1;
+        });
+        panels.forEach((p) => p.classList.toggle("active", p.id === tabId));
+
+        if (tabId === "teacher-students") loadStudentsTable();
+        if (tabId === "teacher-attendance") prepareAttendanceForm();
+        if (tabId === "teacher-marks") resetMarksForms();
+      }
+
+      function wireTabKeyboardNavigation() {
+        const container = document.querySelector('.tabs[role="tablist"]');
+        if (!container) return;
+        container.addEventListener("keydown", (e) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+          e.preventDefault();
+          const btns = Array.from(container.querySelectorAll('[role="tab"]'));
+          const current = document.activeElement;
+          let idx = btns.indexOf(current);
+          if (e.key === "ArrowRight") idx = (idx + 1) % btns.length;
+          if (e.key === "ArrowLeft") idx = (idx - 1 + btns.length) % btns.length;
+          if (e.key === "Home") idx = 0;
+          if (e.key === "End") idx = btns.length - 1;
+          btns[idx].focus();
+          btns[idx].click();
+        });
+      }
+
+      // Students Management
+      function loadStudentsTable() {
+        const tbody = $("#studentsTbody");
+        tbody.innerHTML = "";
+        const filter = ($("#studentClassFilter")?.value || "").trim();
+        const list = state.db.students
+          .filter((s) => (filter ? s.className === filter : true))
+          .sort((a, b) => a.className.localeCompare(b.className) || a.name.localeCompare(b.name));
+        for (const s of list) {
+          const username = state.db.users.find((u) => u.studentId === s.id)?.username || "-";
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${s.name}</td>
+            <td><span class="tag">${s.className}</span></td>
+            <td>${username}</td>
+            <td class="row" style="justify-content:flex-end;">
+              <button class="secondary small" data-edit="${s.id}">Edit</button>
+              <button class="danger small" data-del="${s.id}">Delete</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+
+        $$("button[data-edit]").forEach((btn) =>
+          btn.addEventListener("click", () => editStudent(btn.dataset.edit))
+        );
+        $$("button[data-del]").forEach((btn) =>
+          btn.addEventListener("click", () => deleteStudent(btn.dataset.del))
+        );
+      }
+
+      function editStudent(studentId) {
+        const s = state.db.students.find((x) => x.id === studentId);
+        if (!s) return;
+        const user = state.db.users.find((u) => u.studentId === s.id);
+
+        const form = $("#studentForm");
+        form.id.value = s.id;
+        form.name.value = s.name;
+        form.className.value = s.className;
+        form.username.value = user?.username || "";
+        form.password.value = user?.password || "pass";
+        form.name.focus();
+      }
+
+      function deleteStudent(studentId) {
+        if (!confirm("Delete this student? Related marks and attendance will remain, but login will be removed.")) return;
+        state.db.users = state.db.users.filter((u) => u.studentId !== studentId);
+        state.db.students = state.db.students.filter((s) => s.id !== studentId);
+        saveDB();
+        loadStudentsTable();
+      }
+
+      function handleStudentForm(e) {
+        e.preventDefault();
+        const f = e.target;
+        const id = f.id.value.trim();
+        const name = f.name.value.trim();
+        const className = f.className.value.trim();
+        const username = f.username.value.trim();
+        const password = f.password.value.trim();
+
+        if (!name || !className || !username || !password) {
+          alert("Please fill out all fields.");
+          return;
+        }
+
+        if (id) {
+          const s = state.db.students.find((x) => x.id === id);
+          if (!s) return;
+          s.name = name;
+          s.className = className;
+
+          let user = state.db.users.find((u) => u.studentId === id);
+          if (!user) {
+            state.db.users.push({ id: uid(), username, password, role: "student", studentId: id });
+          } else {
+            user.username = username;
+            user.password = password;
+          }
+        } else {
+          if (state.db.users.some((u) => u.username === username)) {
+            alert("Username already exists.");
+            return;
+          }
+          const newId = uid();
+          state.db.students.push({ id: newId, name, className });
+          state.db.users.push({ id: uid(), username, password, role: "student", studentId: newId });
+        }
+
+        saveDB();
+        f.reset();
+        loadStudentsTable();
+      }
+
+      // Attendance
+      function getStudentsByClass(className) {
+        return state.db.students
+          .filter((s) => s.className === className)
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      function prepareAttendanceForm() {
+        const form = $("#attendanceForm");
+        const dateInput = form.elements["date"];
+        const classInput = form.elements["className"];
+        if (!dateInput.value) dateInput.value = formatDate(new Date());
+        if (!classInput.value) {
+          const topClass = mostCommonClass();
+          if (topClass) classInput.value = topClass;
+        }
+        renderAttendanceTable();
+      }
+
+      function renderAttendanceTable() {
+        const form = $("#attendanceForm");
+        const className = form.elements["className"].value.trim();
+        const date = form.elements["date"].value;
+        const tbody = $("#attendanceTbody");
+        tbody.innerHTML = "";
+
+        if (!className || !date) {
+          tbody.innerHTML = `<tr><td colspan="2" class="muted">Select date and class</td></tr>`;
+          return;
+        }
+
+        const students = getStudentsByClass(className);
+        if (!students.length) {
+          tbody.innerHTML = `<tr><td colspan="2" class="muted">No students in class ${className}</td></tr>`;
+          return;
+        }
+
+        const existing = state.db.attendance.filter(
+          (a) => a.className === className && a.date === date
+        );
+        const presentMap = new Map(existing.map((a) => [a.studentId, a.present]));
+
+        for (const s of students) {
+          const tr = document.createElement("tr");
+          const checked = presentMap.has(s.id) ? presentMap.get(s.id) : false;
+          tr.innerHTML = `
+            <td>${s.name}</td>
+            <td>
+              <input type="checkbox" data-student="${s.id}" ${checked ? "checked" : ""} aria-label="Present for ${s.name}" />
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      function handleAttendanceSave(e) {
+        e.preventDefault();
+        const form = e.target;
+        const className = form.elements["className"].value.trim();
+        const date = form.elements["date"].value;
+        if (!className || !date) {
+          alert("Select a date and class.");
+          return;
+        }
+        const inputs = $$('input[type="checkbox"][data-student]', form);
+        state.db.attendance = state.db.attendance.filter(
+          (a) => !(a.className === className && a.date === date)
+        );
+        for (const inp of inputs) {
+          state.db.attendance.push({
+            id: uid(),
+            date,
+            className,
+            studentId: inp.dataset.student,
+            present: inp.checked,
+          });
+        }
+        saveDB();
+        alert("Attendance saved.");
+      }
+
+      function handleAttendanceLoad() {
+        renderAttendanceTable();
+      }
+
+      function markAllAttendance(value) {
+        const form = $("#attendanceForm");
+        $$('input[type="checkbox"][data-student]', form).forEach((c) => (c.checked = value));
+      }
+
+      // Marks
+      let marksSheetState = null;
+      function resetMarksForms() {
+        const f = $("#marksMetaForm");
+        f.reset();
+        const topClass = mostCommonClass();
+        if (topClass) f.elements["className"].value = topClass;
+        if (state.db.subjects?.length) {
+          f.elements["subject"].value = state.db.subjects[0];
+        }
+        f.elements["date"].value = formatDate(new Date());
+        $("#marksForm").classList.add("hidden");
+      }
+
+      function handlePrepareMarksSheet() {
+        const f = $("#marksMetaForm");
+        const className = f.elements["className"].value.trim();
+        const subject = f.elements["subject"].value.trim();
+        const assessmentName = f.elements["assessmentName"].value.trim();
+        const date = f.elements["date"].value;
+        const total = parseInt(f.elements["total"].value, 10);
+
+        if (!className || !subject || !assessmentName || !date || !total) {
+          alert("Please complete the metadata fields.");
+          return;
+        }
+        const students = getStudentsByClass(className);
+        if (!students.length) {
+          alert("No students found in class " + className + ".");
+          return;
+        }
+
+        marksSheetState = { className, subject, assessmentName, date, total, students };
+        $("#marksSheetTitle").textContent = `${assessmentName} - ${subject} (${className})`;
+        const tbody = $("#marksTbody");
+        tbody.innerHTML = "";
+        for (const s of students) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${s.name}</td>
+            <td>
+              <input type="number" min="0" max="${total}" step="0.5" data-student="${s.id}" placeholder="0 - ${total}" aria-label="Marks for ${s.name}" />
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+        $("#marksForm").classList.remove("hidden");
+      }
+
+      function handleSaveMarks(e) {
+        e.preventDefault();
+        if (!marksSheetState) return;
+
+        const assessmentId = uid();
+        state.db.assessments.push({
+          id: assessmentId,
+          name: marksSheetState.assessmentName,
+          subject: marksSheetState.subject,
+          className: marksSheetState.className,
+          date: marksSheetState.date,
+          total: marksSheetState.total,
+        });
+
+        const inputs = $$('input[type="number"][data-student]', $("#marksForm"));
+        for (const inp of inputs) {
+          const v = inp.value;
+          const num = v === "" ? null : Number(v);
+          state.db.marks.push({
+            id: uid(),
+            assessmentId,
+            studentId: inp.dataset.student,
+            marks: num ?? 0,
+            total: marksSheetState.total,
+          });
+        }
+        saveDB();
+        alert("Marks saved.");
+        $("#marksForm").classList.add("hidden");
+        marksSheetState = null;
+      }
+
+      // Reports (Teacher)
+      function handleBuildReports() {
+        const rf = $("#reportFilters");
+        const className = (rf.elements["className"].value || "").trim();
+        const subject = (rf.elements["subject"].value || "").trim();
+        const fromDate = rf.elements["fromDate"].value ? formatDate(rf.elements["fromDate"].value) : null;
+        const toDate = rf.elements["toDate"].value ? formatDate(rf.elements["toDate"].value) : null;
+
+        buildAttendanceByStudentChart(className, fromDate, toDate);
+        buildAvgMarksByStudentChart(className, subject);
+        buildClassAssessmentAvgChart(className, subject);
+        buildTopPerformersChart(className, subject);
+      }
+
+      function buildAttendanceByStudentChart(className, fromDate, toDate) {
+        const ctx = $("#attendanceByStudentChart");
+        const students = (className ? getStudentsByClass(className) : state.db.students.slice())
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const totalDaysByStudent = new Map();
+        const presentDaysByStudent = new Map();
+
+        const records = state.db.attendance.filter((a) => {
+          if (className && a.className !== className) return false;
+          if (fromDate && a.date < fromDate) return false;
+          if (toDate && a.date > toDate) return false;
+          return true;
+        });
+
+        for (const a of records) {
+          totalDaysByStudent.set(a.studentId, 1 + (totalDaysByStudent.get(a.studentId) || 0));
+          if (a.present) {
+            presentDaysByStudent.set(a.studentId, 1 + (presentDaysByStudent.get(a.studentId) || 0));
+          }
+        }
+
+        const labels = students.map((s) => s.name);
+        const data = students.map((s) => {
+          const total = totalDaysByStudent.get(s.id) || 0;
+          const present = presentDaysByStudent.get(s.id) || 0;
+          return total ? Math.round((present / total) * 100) : 0;
+        });
+
+        renderBarChart(ctx, "Attendance %", labels, data, "#60a5fa");
+      }
+
+      function buildAvgMarksByStudentChart(className, subject) {
+        const ctx = $("#avgMarksByStudentChart");
+        const students = (className ? getStudentsByClass(className) : state.db.students.slice())
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        const assessments = state.db.assessments.filter((a) => {
+          if (className && a.className !== className) return false;
+          if (subject && a.subject !== subject) return false;
+          return true;
+        });
+        const assessIds = new Set(assessments.map((a) => a.id));
+
+        const sums = new Map();
+        const counts = new Map();
+
+        for (const m of state.db.marks) {
+          if (!assessIds.has(m.assessmentId)) continue;
+          sums.set(m.studentId, (sums.get(m.studentId) || 0) + (m.marks || 0));
+          counts.set(m.studentId, (counts.get(m.studentId) || 0) + 1);
+        }
+
+        const labels = students.map((s) => s.name);
+        const data = students.map((s) => {
+          const total = sums.get(s.id) || 0;
+          const c = counts.get(s.id) || 0;
+          return c ? +(total / c).toFixed(2) : 0;
+        });
+
+        renderBarChart(ctx, "Average Marks", labels, data, "#34d399");
+      }
+
+      function buildClassAssessmentAvgChart(className, subject) {
+        const ctx = $("#classAssessmentAvgChart");
+        const assessments = state.db.assessments
+          .filter((a) => {
+            if (className && a.className !== className) return false;
+            if (subject && a.subject !== subject) return false;
+            return true;
+          })
+          .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+
+        const labels = assessments.map((a) => `${a.name} (${a.subject})`);
+        const data = assessments.map((a) => {
+          const ms = state.db.marks.filter((m) => m.assessmentId === a.id);
+          if (!ms.length) return 0;
+          const avg = ms.reduce((acc, m) => acc + (m.marks || 0), 0) / ms.length;
+          return +avg.toFixed(2);
+        });
+
+        renderLineChart(ctx, "Class Average", labels, data, "#eab308");
+      }
+
+      function buildTopPerformersChart(className, subject) {
+        const ctx = $("#topPerformersChart");
+        const assessments = state.db.assessments
+          .filter((a) => {
+            if (className && a.className !== className) return false;
+            if (subject && a.subject !== subject) return false;
+            return true;
+          })
+          .sort((a, b) => b.date.localeCompare(a.date));
+
+        if (!assessments.length) {
+          renderBarChart(ctx, "Top Performers", [], [], "#f472b6");
+          return;
+        }
+        const latest = assessments[0];
+        const ms = state.db.marks.filter((m) => m.assessmentId === latest.id);
+        const byStudent = ms.map((m) => ({ studentId: m.studentId, marks: m.marks || 0 }));
+        byStudent.sort((a, b) => b.marks - a.marks);
+        const top = byStudent.slice(0, 5);
+        const labels = top.map((x) => getStudentName(x.studentId));
+        const data = top.map((x) => x.marks);
+
+        renderBarChart(ctx, `Top Performers - ${latest.name}`, labels, data, "#f472b6");
+      }
+
+      // Student Dashboard
+      function renderStudentDashboard() {
+        const u = state.currentUser;
+        if (!u?.studentId) {
+          $("#studentInfo").textContent = "No student bound to this account.";
+          return;
+        }
+        const s = state.db.students.find((x) => x.id === u.studentId);
+        if (!s) {
+          $("#studentInfo").textContent = "Student record not found.";
+          return;
+        }
+        $("#studentInfo").innerHTML = `${s.name} <span class="badge">${s.className}</span>`;
+
+        buildStudentAttendanceOverTime(s.id);
+        buildStudentAvgMarksBySubject(s.id);
+        buildStudentLatestScores(s.id);
+        buildStudentSummary(s.id);
+      }
+
+      function buildStudentAttendanceOverTime(studentId) {
+        const ctx = $("#studentAttendanceOverTime");
+        const rs = state.db.attendance
+          .filter((a) => a.studentId === studentId)
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        const labels = rs.map((r) => r.date);
+        const data = rs.map((r) => (r.present ? 1 : 0));
+        renderLineChart(ctx, "Present(1)/Absent(0)", labels, data, "#60a5fa");
+      }
+
+      function buildStudentAvgMarksBySubject(studentId) {
+        const ctx = $("#studentAvgMarksBySubject");
+        const subjectSums = new Map();
+        const subjectCounts = new Map();
+        for (const m of state.db.marks.filter((x) => x.studentId === studentId)) {
+          const a = state.db.assessments.find((as) => as.id === m.assessmentId);
+          if (!a) continue;
+          const subj = a.subject;
+          subjectSums.set(subj, (subjectSums.get(subj) || 0) + (m.marks || 0));
+          subjectCounts.set(subj, (subjectCounts.get(subj) || 0) + 1);
+        }
+        const labels = Array.from(subjectSums.keys()).sort();
+        const data = labels.map((subj) => {
+          const sum = subjectSums.get(subj) || 0;
+          const count = subjectCounts.get(subj) || 0;
+          return count ? +(sum / count).toFixed(2) : 0;
+        });
+        renderBarChart(ctx, "Avg Marks", labels, data, "#34d399");
+      }
+
+      function buildStudentLatestScores(studentId) {
+        const ctx = $("#studentLatestScores");
+        const marksByAssessment = new Map();
+        for (const m of state.db.marks.filter((x) => x.studentId === studentId)) {
+          marksByAssessment.set(m.assessmentId, m.marks || 0);
+        }
+        const assessments = state.db.assessments
+          .filter((a) => marksByAssessment.has(a.id))
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 5)
+          .reverse();
+
+        const labels = assessments.map((a) => `${a.name} (${a.subject})`);
+        const data = assessments.map((a) => marksByAssessment.get(a.id));
+
+        renderLineChart(ctx, "Recent Scores", labels, data, "#eab308");
+      }
+
+      function buildStudentSummary(studentId) {
+        const ul = $("#studentSummary");
+        ul.innerHTML = "";
+        const att = state.db.attendance.filter((a) => a.studentId === studentId);
+        const present = att.filter((a) => a.present).length;
+        const total = att.length;
+        const attendancePct = total ? Math.round((present / total) * 100) : 0;
+
+        const myMarks = state.db.marks.filter((m) => m.studentId === studentId);
+        const avg = myMarks.length
+          ? +(myMarks.reduce((acc, m) => acc + (m.marks || 0), 0) / myMarks.length).toFixed(2)
+          : 0;
+
+        const li1 = document.createElement("li");
+        li1.textContent = `Attendance: ${present}/${total} (${attendancePct}%)`;
+        const li2 = document.createElement("li");
+        li2.textContent = `Overall Average Marks: ${avg}`;
+        ul.appendChild(li1);
+        ul.appendChild(li2);
+      }
+
+      // Chart utilities
+      function renderBarChart(canvas, label, labels, data, color) {
+        destroyChart(canvas);
+        state.charts[canvas.id] = new Chart(canvas, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label,
+                data,
+                backgroundColor: color,
+                borderRadius: 6,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: true, labels: { color: getAxisColor() } },
+            },
+            scales: {
+              x: { ticks: { color: getAxisColor() }, grid: { color: getGridColor() } },
+              y: { ticks: { color: getAxisColor() }, grid: { color: getGridColor() } },
+            },
+          },
+        });
+      }
+
+      function renderLineChart(canvas, label, labels, data, color) {
+        destroyChart(canvas);
+        state.charts[canvas.id] = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label,
+                data,
+                borderColor: color,
+                backgroundColor: color + "44",
+                fill: true,
+                tension: 0.25,
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: true, labels: { color: getAxisColor() } },
+            },
+            scales: {
+              x: { ticks: { color: getAxisColor() }, grid: { color: getGridColor() } },
+              y: { ticks: { color: getAxisColor() }, grid: { color: getGridColor() } },
+            },
+          },
+        });
+      }
+
+      function getAxisColor() {
+        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        return isDark ? "#cbd5e1" : "#475569";
+        }
+      function getGridColor() {
+        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        return isDark ? "#1f2937" : "#e2e8f0";
+      }
+
+      function destroyChart(canvas) {
+        const existing = state.charts[canvas.id];
+        if (existing) {
+          existing.destroy();
+          delete state.charts[canvas.id];
+        }
+      }
+
+      function mostCommonClass() {
+        const counts = new Map();
+        for (const s of state.db.students) {
+          counts.set(s.className, 1 + (counts.get(s.className) || 0));
+        }
+        let best = null, max = 0;
+        for (const [cls, cnt] of counts) {
+          if (cnt > max) { best = cls; max = cnt; }
+        }
+        return best;
+      }
+
+      function getStudentName(studentId) {
+        return state.db.students.find((s) => s.id === studentId)?.name || "Unknown";
+      }
+
+      // Export / Import
+      function handleExport() {
+        const blob = new Blob([JSON.stringify(state.db, null, 2)], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `samms_export_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      async function handleImport(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          if (!data || typeof data !== "object" || !data.users || !data.students) {
+            alert("Invalid file format.");
+            return;
+          }
+          state.db = data;
+          saveDB();
+          alert("Import successful.");
+          if (state.currentUser?.role === "teacher") {
+            selectTab("teacher-students");
+            loadStudentsTable();
+          } else if (state.currentUser?.role === "student") {
+            renderStudentDashboard();
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Import failed.");
+        } finally {
+          e.target.value = "";
+        }
+      }
+
+      // Wire events
+      function wireEvents() {
+        $("#loginForm").addEventListener("submit", handleLogin);
+        $("#logoutBtn").addEventListener("click", logout);
+
+        // Tabs
+        $$(".tab-btn").forEach((b) =>
+          b.addEventListener("click", () => selectTab(b.dataset.tab))
+        );
+        wireTabKeyboardNavigation();
+
+        // Students
+        $("#studentForm").addEventListener("submit", handleStudentForm);
+        $("#resetStudentForm").addEventListener("click", () => $("#studentForm").reset());
+        $("#refreshStudents").addEventListener("click", loadStudentsTable);
+        $("#studentClassFilter").addEventListener("input", loadStudentsTable);
+
+        // Attendance
+        const attendanceForm = $("#attendanceForm");
+        attendanceForm.addEventListener("submit", handleAttendanceSave);
+        attendanceForm.elements["date"].addEventListener("change", renderAttendanceTable);
+        attendanceForm.elements["className"].addEventListener("change", renderAttendanceTable);
+        $("#loadAttendance").addEventListener("click", handleAttendanceLoad);
+        $("#markAllPresent").addEventListener("click", () => markAllAttendance(true));
+        $("#markAllAbsent").addEventListener("click", () => markAllAttendance(false));
+
+        // Marks
+        $("#prepareMarks").addEventListener("click", handlePrepareMarksSheet);
+        $("#marksForm").addEventListener("submit", handleSaveMarks);
+        $("#cancelMarks").addEventListener("click", () => {
+          $("#marksForm").classList.add("hidden");
+          marksSheetState = null;
+        });
+
+        // Reports
+        $("#buildReports").addEventListener("click", handleBuildReports);
+
+        // Export / Import
+        $("#btnExport").addEventListener("click", handleExport);
+        $("#importFile").addEventListener("change", handleImport);
+      }
+
+      // Init
+      function init() {
+        loadDB();
+        renderAuthControls();
+        showView("view-login");
+        wireEvents();
+      }
+
+      document.addEventListener("DOMContentLoaded", init);
+    })();
+  </script>
+</body>
+</html>
